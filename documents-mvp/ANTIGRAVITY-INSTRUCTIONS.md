@@ -4,40 +4,26 @@
 
 O **VIZIO AI** é uma extensão para Chrome voltada para acessibilidade (cegueira total). O objetivo é substituir a navegação por teclado (TAB) por uma interface 100% de voz.
 
-## 2\. Stack Técnica Obrigatória
+## 2. Stack Técnica
+- **Linguagens:** HTML5, CSS3, JavaScript (Vanilla ES6).
+- **Manifest:** Chrome Extension Manifest V3.
+- **IA:** Google Gemini API (model: gemini-1.5-flash para baixa latência).
+- **Storage:** chrome.storage.local (sem banco de dados externo para o MVP).
 
-* **Framework:** Next.js (para o Dashboard/Popup)  
-* **Autenticação/Banco:** Supabase  
-* **UI:** shadcn/ui \+ Tailwind CSS  
-* **Estilo:** Clean, Light Mode (Estética Vercel/Linear)  
-* **Wake Word:** Picovoice Porcupine (WASM/Local)  
-* **LLM:** Gemini 1.5 Pro ou GPT-4o para interpretação do DOM.
-
-## 3\. Arquitetura de Arquivos Recomendada
-
-/vizio-ai-extension
-
-├── /public              \# Ativos estáticos e modelos WASM
-
-├── /src
-
-│   ├── /components      \# Componentes shadcn/ui
-
-│   ├── /extension       \# Scripts específicos da extensão
-
-│   │   ├── background.ts \# Gerencia estado, Wake Word e Mute
-
-│   │   ├── content.ts    \# DOM Parser e execução de ações
-
-│   │   └── inject.ts     \# Injeção de scripts na página
-
-│   ├── /lib             \# Utilitários (Supabase client, AI logic)
-
-│   └── /popup           \# Interface Next.js da extensão
-
-├── manifest.json        \# Configuração da extensão Chrome v3
-
-└── tailwind.config.js
+## 3. Estrutura de Arquivos
+/vizio-ai
+├── manifest.json
+├── /icons
+├── /popup
+│   ├── popup.html
+│   ├── popup.css
+│   └── popup.js
+├── /scripts
+│   ├── background.js   # Service Worker: Gerencia abas, áudio e chamadas ao Gemini
+│   ├── content.js      # DOM Parser: Extrai árvore de acessibilidade
+│   └── sidepanel.js    # Interface lateral (opcional)
+└── /lib
+    └── google-ai-sdk.js
 
 ## 4\. Regras de Implementação para a IA
 
