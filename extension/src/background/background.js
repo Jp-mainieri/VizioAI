@@ -11,6 +11,30 @@ const MODEL_NAME = VIZIO_CONFIG.MODEL_NAME || "gemini-1.5-flash";
 const SYSTEM_PROMPT = `Você é um Assistente de Acessibilidade (VIZIO AI).
 Seu objetivo é interagir com a página Chrome enviada como uma Árvore Semântica DOM.
 
+CONTEXTO DE INTERAÇÃO:
+O usuário não vê a tela. Ele depende inteiramente da sua descrição para entender onde está, o que pode fazer e o que está acontecendo.
+
+DIRETRIZES DE RESPOSTA:
+
+1. PRIORIZAÇÃO SEMÂNTICA:
+   - Ignore o layout visual (cores, posições). Foque na hierarquia (Títulos H1-H6), regiões (Header, Main, Footer) e elementos interativos.
+   - Sempre informe o estado da página: "A página carregou", "Há um pop-up bloqueando a leitura", "Estamos no formulário de login".
+
+2. DESCRIÇÕES DE AÇÃO:
+   - Antes de executar, narre: "Vou clicar no botão de pesquisa".
+   - Durante a execução, dê feedback: "Processando...", "Aguardando o site responder".
+   - Após a execução, confirme: "Pronto, agora estamos na página de resultados".
+
+3. GERENCIAMENTO DE AMBIGUIDADE:
+   - Se houver múltiplos elementos iguais, numere-os: "Encontrei 3 botões de compra. O primeiro é para o modelo azul, o segundo para o preto. Qual você prefere?".
+
+4. TOM DE VOZ:
+   - Seja conciso. Evite termos visuais como "veja" ou "botão verde". Use "Selecione a opção X" ou "O campo de texto está pronto".
+   - Use referências de áudio se necessário.
+
+5. SEGURANÇA:
+   - Para ações críticas (pagar, deletar, enviar), você DEVE pedir confirmação: "Esta é uma ação importante. Posso prosseguir?".
+
 Regras de Resposta:
 1. Retorne APENAS um JSON válido.
 2. Campos obrigatórios:
@@ -25,7 +49,7 @@ Exemplos:
 - Navegar: {"action": "navigate", "direction": "back", "ttsMessage": "Voltando para a página anterior."}`;
 
 function broadcastStatus(statusText) {
-  chrome.runtime.sendMessage({ action: 'UPDATE_STATUS', statusText }).catch(() => {});
+  chrome.runtime.sendMessage({ action: 'UPDATE_STATUS', statusText }).catch(() => { });
 }
 
 // ─── Comando Principal (Vertex AI) ──────────────────────────
@@ -80,15 +104,15 @@ async function handleVoiceCommand(prompt) {
 
     const { action, targetId, text, direction, ttsMessage } = aiResponse;
     if (ttsMessage) chrome.tts.speak(ttsMessage, { rate: 1.2, lang: 'pt-BR' });
-    
+
     // Executa a interação baseada na ação decidida pela IA
     if (action === 'click' || action === 'focus' || action === 'type' || action === 'navigate') {
-      chrome.tabs.sendMessage(tab.id, { 
-        action: "INTERACT", 
-        interactionType: action, 
-        targetId, 
-        text, 
-        direction 
+      chrome.tabs.sendMessage(tab.id, {
+        action: "INTERACT",
+        interactionType: action,
+        targetId,
+        text,
+        direction
       });
     }
 
@@ -111,7 +135,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       const tab = tabs[0];
       if (!tab) return;
-      
+
       try {
         await chrome.tabs.sendMessage(tab.id, request);
       } catch (err) {
@@ -139,12 +163,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
   // Encaminhamento de mensagens do Content Script -> Popup
   if (request.action === 'TRANSCRIPT') {
-    chrome.runtime.sendMessage({ action: 'TRANSCRIPT', text: request.text, isFinal: request.isFinal }).catch(() => {});
+    chrome.runtime.sendMessage({ action: 'TRANSCRIPT', text: request.text, isFinal: request.isFinal }).catch(() => { });
     if (request.isFinal && request.text.trim()) {
       handleVoiceCommand(request.text.trim());
     }
   } else if (['RECOGNITION_STARTED', 'RECOGNITION_ENDED', 'RECOGNITION_ERROR'].includes(request.action)) {
-    chrome.runtime.sendMessage(request).catch(() => {});
+    chrome.runtime.sendMessage(request).catch(() => { });
   }
 
   return true;
