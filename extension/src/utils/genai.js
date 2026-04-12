@@ -1,37 +1,39 @@
 // src/utils/genai.js
-// Um Polyfill Customizado 100% Vanilla JS desenhado para recriar 
-// com exatidão matemática o funcionamento do pacote NPM @google/genai
+// Polyfill customizado para Vertex AI (Google Cloud) REST API
+// Compatível com Vanilla JS (Sem Build/Vite)
+import { VIZIO_CONFIG } from './config.js';
 
 export class GoogleGenAI {
-  constructor(config = {}) {
-    this.apiKey = config.apiKey;
+  constructor() {
+    this.projectId = VIZIO_CONFIG.PROJECT_ID;
+    this.location  = VIZIO_CONFIG.LOCATION || 'us-central1';
+    this.apiKey    = VIZIO_CONFIG.API_KEY;
     
-    this.models = {
+    console.log(`VIZIO AI: Conectando ao Vertex AI (${this.location}/${this.projectId})`);
+  }
+
+  get models() {
+    return {
       generateContent: async (params) => {
         const { model, contents, config: requestConfig } = params;
         
-        // Resolve versões betas antigas vs o novo alpha do Gemini 2 e 3 instantaneamente
-        const apiVersion = model.startsWith("gemini-3") || model.startsWith("gemini-2") ? "v1alpha" : "v1beta";
-        const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${this.apiKey}`;
+        // Endpoint REST do Vertex AI para o Gemini
+        const url = `https://${this.location}-aiplatform.googleapis.com/v1/projects/${this.projectId}/locations/${this.location}/publishers/google/models/${model}:generateContent?key=${this.apiKey}`;
         
-        // Empacota o texto igual a biblioteca real do Node.js
         const payload = {
-          contents: Array.isArray(contents) ? contents : [{ parts: [{ text: contents }] }]
+          contents: Array.isArray(contents) ? contents : [{ role: "user", parts: [{ text: contents }] }]
         };
 
         if (requestConfig) {
-            if (requestConfig.systemInstruction) {
-                payload.system_instruction = { parts: { text: requestConfig.systemInstruction } };
-            }
-            if (requestConfig.responseMimeType) {
-                payload.generationConfig = { responseMimeType: requestConfig.responseMimeType };
-            }
-            if (requestConfig.temperature !== undefined) {
-                payload.generationConfig = { ...payload.generationConfig, temperature: requestConfig.temperature };
-            }
-            if (requestConfig.maxOutputTokens !== undefined) {
-                payload.generationConfig = { ...payload.generationConfig, maxOutputTokens: requestConfig.maxOutputTokens };
-            }
+          if (requestConfig.systemInstruction) {
+            payload.system_instruction = { parts: [{ text: requestConfig.systemInstruction }] };
+          }
+          if (requestConfig.responseMimeType) {
+            payload.generationConfig = { responseMimeType: requestConfig.responseMimeType };
+          }
+          if (requestConfig.temperature !== undefined) {
+            payload.generationConfig = { ...payload.generationConfig, temperature: requestConfig.temperature };
+          }
         }
 
         const response = await fetch(url, {
@@ -41,8 +43,9 @@ export class GoogleGenAI {
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error?.message || "Erro na API Gemini Core");
+          const errorData = await response.json().catch(() => ({}));
+          console.error("Erro Vertex AI:", errorData);
+          throw new Error(errorData[0]?.error?.message || errorData.error?.message || "Erro na API Vertex AI. Verifique se o Project ID e a API Key no seu config.js estão corretos.");
         }
 
         const data = await response.json();
