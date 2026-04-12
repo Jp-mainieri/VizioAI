@@ -1,6 +1,6 @@
-// offscreen.js — VIZIO AI Offscreen Document
-// Roda no contexto da extensão (chrome-extension://), então herda a permissão de microfone.
-console.log("VIZIO AI: Offscreen Document Loaded.");
+// offscreen.js — legado (não usado): o reconhecimento de voz corre no popup para evitar
+// not-allowed da Web Speech API em documentos offscreen. Mantido só como referência.
+console.log("VIZIO AI: Offscreen Document Loaded (unused).");
 
 const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 

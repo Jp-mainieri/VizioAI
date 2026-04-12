@@ -13,28 +13,6 @@ Regras Absolutas:
 3. "action": "speak" é só para ler texto.
 4. "action": "click" caso a intenção do usuário no DOM necessite apertar algo. "targetId" obrigatório.`;
 
-// ─── Offscreen Document Manager ─────────────────────────────
-const OFFSCREEN_URL = 'src/offscreen/offscreen.html';
-
-async function ensureOffscreenDocument() {
-  const existing = await chrome.offscreen.hasDocument();
-  if (!existing) {
-    await chrome.offscreen.createDocument({
-      url: OFFSCREEN_URL,
-      reasons: ['USER_MEDIA'],
-      justification: 'Reconhecimento de voz via API nativa com stream ativo.'
-    });
-    console.log("VIZIO AI: Offscreen document criado.");
-  }
-}
-
-async function closeOffscreenDocument() {
-  if (await chrome.offscreen.hasDocument()) {
-    await chrome.offscreen.closeDocument();
-    console.log("VIZIO AI: Offscreen document fechado.");
-  }
-}
-
 function broadcastStatus(statusText) {
   chrome.runtime.sendMessage({ action: 'UPDATE_STATUS', statusText }).catch(() => {});
 }
@@ -107,61 +85,16 @@ async function handleVoiceCommand(prompt) {
 // ─── Message Router ──────────────────────────────────────────
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
-  // Comandos Popup -> Offscreen
-  if (request.action === 'START_RECOGNITION') {
-    ensureOffscreenDocument().then(() => {
-      setTimeout(() => {
-        chrome.runtime.sendMessage({ target: 'offscreen', action: 'START_RECOGNITION' });
-      }, 200);
-      sendResponse({ status: 'ok' });
-    }).catch(err => {
-      console.error("Erro offscreen:", err);
-      sendResponse({ status: 'error', message: err.message });
-    });
-    return true;
-  }
-
-  if (request.action === 'STOP_RECOGNITION') {
-    chrome.runtime.sendMessage({ target: 'offscreen', action: 'STOP_RECOGNITION' });
-    sendResponse({ status: 'ok' });
-    return true;
-  }
-
-  // Popup -> Background
   if (request.action === 'TRIGGER_VOICE_COMMAND') {
     handleVoiceCommand(request.prompt);
     sendResponse({ status: 'started' });
     return true;
   }
 
-  // Página de Permissão -> Popup
   if (request.action === 'MIC_PERMISSION_GRANTED') {
     chrome.runtime.sendMessage({ action: 'MIC_PERMISSION_GRANTED' }).catch(() => {});
     sendResponse({ status: 'ok' });
     return true;
-  }
-
-  // Offscreen -> Popup/Background
-  if (request.source === 'offscreen') {
-    if (request.action === 'TRANSCRIPT') {
-      chrome.runtime.sendMessage({ action: 'TRANSCRIPT', text: request.text, isFinal: request.isFinal }).catch(() => {});
-      if (request.isFinal && request.text.trim()) {
-        handleVoiceCommand(request.text.trim());
-      }
-    }
-    else if (request.action === 'RECOGNITION_STARTED') {
-      chrome.runtime.sendMessage({ action: 'RECOGNITION_STARTED' }).catch(() => {});
-    }
-    else if (request.action === 'RECOGNITION_ENDED') {
-      chrome.runtime.sendMessage({ action: 'RECOGNITION_ENDED' }).catch(() => {});
-      // Não fecha o offscreen document para que a sessão `chrome-extension://`
-      // do Chrome não seja encerrada. Isso evita a perda de compasso da permissão
-      // "Allow while visiting the site".
-    }
-    else if (request.action === 'RECOGNITION_ERROR') {
-      chrome.runtime.sendMessage({ action: 'RECOGNITION_ERROR', error: request.error }).catch(() => {});
-      // Mesma justificativa
-    }
   }
 
   return true;

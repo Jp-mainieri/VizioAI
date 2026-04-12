@@ -19,6 +19,7 @@ grantBtn.addEventListener('click', async () => {
     // Solicita acesso ao microfone — estamos em uma aba normal,
     // então o Chrome exibe corretamente a barra de permissão.
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    console.info('[VIZIO permission] getUserMedia OK (microfone concedido nesta página da extensão).');
 
     // Libera imediatamente os tracks — só precisávamos do grant
     stream.getTracks().forEach(track => track.stop());
@@ -38,7 +39,7 @@ grantBtn.addEventListener('click', async () => {
     }, 1500);
 
   } catch (err) {
-    console.error('Permissão negada:', err);
+    console.error('[VIZIO permission] getUserMedia falhou (camada microfone, não Speech API):', err?.name, err?.message, err);
     micWrap.classList.remove('requesting');
     micWrap.classList.add('error');
 
