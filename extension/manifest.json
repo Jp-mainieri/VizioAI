@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "VIZIO AI",
+  "version": "1.0.0",
+  "description": "Uma extensão de acessibilidade para Google Chrome guiada por IA, substituindo o teclado por comandos de voz.",
+  "permissions": [
+    "tabs",
+    "storage",
+    "scripting",
+    "activeTab",
+    "tts",
+    "audioCapture",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {},
+  "side_panel": {
+    "default_path": "src/popup/index.html"
+  }
+}

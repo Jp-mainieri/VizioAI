@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VIZIO AI — Permissão de Microfone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #09090f;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --accent: #7c6af7;
+      --accent-glow: rgba(124,106,247,0.3);
+      --accent-2: #c084fc;
+      --text: #f0f0f8;
+      --text-muted: rgba(240,240,248,0.5);
+      --success: #34d399;
+      --danger: #f87171;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Glow blobs */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -150px; left: -150px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(124,106,247,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -150px; right: -150px;
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(192,132,252,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 48px 40px;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+      position: relative;
+      z-index: 1;
+      backdrop-filter: blur(12px);
+    }
+
+    /* Animated mic icon */
+    .mic-wrap {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .mic-wrap::before, .mic-wrap::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      opacity: 0;
+      animation: none;
+    }
+    .mic-wrap::before { width: 110px; height: 110px; }
+    .mic-wrap::after  { width: 130px; height: 130px; }
+
+    .mic-wrap.requesting::before {
+      opacity: 0.4;
+      animation: ring 1.8s ease-out infinite;
+    }
+    .mic-wrap.requesting::after {
+      opacity: 0.2;
+      animation: ring 1.8s ease-out 0.5s infinite;
+    }
+
+    @keyframes ring {
+      0%   { transform: scale(0.8); opacity: 0.4; }
+      100% { transform: scale(1.2); opacity: 0; }
+    }
+
+    .mic-circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #1a1830, #12101f);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 32px var(--accent-glow);
+      transition: box-shadow 0.3s;
+    }
+
+    .mic-wrap.requesting .mic-circle {
+      animation: breathe 2s ease-in-out infinite;
+    }
+
+    @keyframes breathe {
+      0%, 100% { box-shadow: 0 0 24px var(--accent-glow); }
+      50%       { box-shadow: 0 0 48px rgba(124,106,247,0.5); }
+    }
+
+    .mic-wrap.success .mic-circle {
+      background: linear-gradient(145deg, #0d2e20, #071a12);
+      box-shadow: 0 0 32px rgba(52,211,153,0.3);
+    }
+
+    .mic-wrap.error .mic-circle {
+      background: linear-gradient(145deg, #2e0d0d, #1a0707);
+      box-shadow: 0 0 32px rgba(248,113,113,0.3);
+    }
+
+    .heading {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .logo {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Steps */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .step-text strong {
+      color: var(--text);
+    }
+
+    /* CTA Button */
+    #grant-btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none;
+      border-radius: 14px;
+      padding: 16px 32px;
+      color: white;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 6px 24px var(--accent-glow);
+    }
+
+    #grant-btn:hover:not(:disabled) {
+      opacity: 0.9;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 32px var(--accent-glow);
+    }
+
+    #grant-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Feedback message */
+    #feedback {
+      font-size: 13px;
+      font-weight: 500;
+      min-height: 20px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    #feedback.visible {
+      opacity: 1;
+    }
+
+    #feedback.success { color: var(--success); }
+    #feedback.error   { color: var(--danger);  }
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- Mic icon animado -->
+    <div class="mic-wrap" id="mic-wrap">
+      <div class="mic-circle">
+        <svg id="mic-icon" width="32" height="32" viewBox="0 0 24 24" fill="none">
+          <rect x="9" y="2" width="6" height="11" rx="3" fill="url(#g1)"/>
+          <path d="M5 11a7 7 0 0 0 14 0" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+          <line x1="12" y1="18" x2="12" y2="22" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+          <line x1="9" y1="22" x2="15" y2="22" stroke="url(#g2)" stroke-width="2" stroke-linecap="round"/>
+          <defs>
+            <linearGradient id="g1" x1="9" y1="2" x2="15" y2="13" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#7c6af7"/><stop offset="1" stop-color="#c084fc"/>
+            </linearGradient>
+            <linearGradient id="g2" x1="5" y1="11" x2="19" y2="22" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#7c6af7"/><stop offset="1" stop-color="#c084fc"/>
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Texto -->
+    <div class="heading">
+      <span class="logo">VIZIO AI</span>
+      <h1>Permissão de Microfone</h1>
+      <p class="subtitle">
+        Para ouvir seus comandos de voz, a extensão precisa de acesso
+        ao microfone. Isso é feito uma única vez.
+      </p>
+    </div>
+
+    <!-- Passos -->
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Clique em <strong>"Liberar Microfone"</strong> abaixo</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">
+          O Chrome exibirá uma barra de permissão no topo da janela —
+          clique em <strong>"Permitir"</strong>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">
+          Esta página se fechará automaticamente e você poderá
+          usar o microfone no popup da extensão
+        </div>
+      </div>
+    </div>
+
+    <!-- Botão -->
+    <button id="grant-btn">🎤 Liberar Microfone</button>
+
+    <!-- Feedback -->
+    <div id="feedback"></div>
+
+  </div>
+
+  <script src="permission.js"></script>
+</body>
+</html>
