@@ -8,9 +8,7 @@
     "storage",
     "scripting",
     "activeTab",
-    "audio",
     "tts",
-    "microphone",
     "offscreen"
   ],
   "host_permissions": [

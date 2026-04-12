@@ -43,25 +43,21 @@ function resetSendBtn() {
 // O popup perde foco (e fecha) quando o Chrome tenta exibir o dialogo de permissao.
 // A solucao e abrir uma aba dedicada e persistente que chama getUserMedia corretamente.
 async function checkOrRequestMicPermission() {
-  // Verifica se ja temos permissao
+  // Verifica se a extensão (chrome-extension://) já possui a permissão de usar o microfone
+  // usando o getUserMedia diretamente. Se já foi dado na aba de permissão,
+  // isso não exibe nenhum prompt e retorna com sucesso imediatamente!
   try {
-    const result = await navigator.permissions.query({ name: 'microphone' });
-    if (result.state === 'granted') {
-      return true;
-    }
-  } catch (_) {
-    // navigator.permissions.query pode nao suportar 'microphone' em alguns contextos
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => track.stop());
+    return true;
+  } catch (err) {
+    // Não temos acesso: precisamos abrir a nossa aba dedicada para forçar o prompt do Chrome
+    setStatus('idle', 'Abrindo pagina de permissao...');
+    chrome.tabs.create(
+      { url: chrome.runtime.getURL('src/permission/permission.html'), active: true }
+    );
+    return false;
   }
-
-  // Nao concedida: abre a pagina dedicada em nova aba para solicitar permissao.
-  setStatus('idle', 'Abrindo pagina de permissao...');
-
-  chrome.tabs.create(
-    { url: chrome.runtime.getURL('src/permission/permission.html'), active: true }
-  );
-
-  // Retorna false: o reconhecimento so inicia apos MIC_PERMISSION_GRANTED (listener abaixo)
-  return false;
 }
 
 // --- Mic Toggle ---

@@ -13,76 +13,38 @@ Regras Absolutas:
 3. "action": "speak" é só para ler texto.
 4. "action": "click" caso a intenção do usuário no DOM necessite apertar algo. "targetId" obrigatório.`;
 
-// ─── Helpers ─────────────────────────────────────────────────
+// ─── Offscreen Document Manager ─────────────────────────────
+const OFFSCREEN_URL = 'src/offscreen/offscreen.html';
 
-// Retorna a aba ativa atual (filtrando páginas do sistema)
-async function getActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return null;
-  if (tab.url.startsWith("chrome://") || tab.url.startsWith("edge://") || tab.url.startsWith("about:")) return null;
-  return tab;
-}
-
-// Garante que o content script está injetado na aba
-async function ensureContentScript(tabId) {
-  try {
-    // Testa se o content script já está presente
-    await chrome.tabs.sendMessage(tabId, { action: 'PING' });
-  } catch (_) {
-    // Não está presente: injeta
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['src/content/content.js']
+async function ensureOffscreenDocument() {
+  const existing = await chrome.offscreen.hasDocument();
+  if (!existing) {
+    await chrome.offscreen.createDocument({
+      url: OFFSCREEN_URL,
+      reasons: ['USER_MEDIA'],
+      justification: 'Reconhecimento de voz via API nativa com stream ativo.'
     });
-    // Aguarda o script inicializar
-    await new Promise(r => setTimeout(r, 200));
+    console.log("VIZIO AI: Offscreen document criado.");
   }
 }
 
-// Envia status ao popup (ignora erro se popup estiver fechado)
+async function closeOffscreenDocument() {
+  if (await chrome.offscreen.hasDocument()) {
+    await chrome.offscreen.closeDocument();
+    console.log("VIZIO AI: Offscreen document fechado.");
+  }
+}
+
 function broadcastStatus(statusText) {
   chrome.runtime.sendMessage({ action: 'UPDATE_STATUS', statusText }).catch(() => {});
 }
 
-// ─── Reconhecimento de Voz via Content Script ────────────────
-
-let activeRecognitionTabId = null;
-
-async function startRecognitionInTab() {
-  const tab = await getActiveTab();
-
-  if (!tab) {
-    broadcastStatus('Página restrita');
-    chrome.runtime.sendMessage({ action: 'RECOGNITION_ERROR', error: 'restricted-page' }).catch(() => {});
-    return;
-  }
-
-  try {
-    await ensureContentScript(tab.id);
-    activeRecognitionTabId = tab.id;
-    await chrome.tabs.sendMessage(tab.id, { action: 'START_VOICE_RECOGNITION' });
-  } catch (err) {
-    console.error("VIZIO AI: Falha ao iniciar reconhecimento no content script:", err);
-    chrome.runtime.sendMessage({ action: 'RECOGNITION_ERROR', error: err.message }).catch(() => {});
-  }
-}
-
-async function stopRecognitionInTab() {
-  if (activeRecognitionTabId) {
-    try {
-      await chrome.tabs.sendMessage(activeRecognitionTabId, { action: 'STOP_VOICE_RECOGNITION' });
-    } catch (_) {}
-    activeRecognitionTabId = null;
-  }
-}
-
 // ─── Comando Principal (Gemini) ──────────────────────────────
-
 async function handleVoiceCommand(prompt) {
-  const tab = await getActiveTab();
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  if (!tab) {
-    chrome.tts.speak("Desculpe, não atuo em páginas de sistema.", { rate: 1.2, lang: 'pt-BR' });
+  if (!tab || tab.url.startsWith("chrome://") || tab.url.startsWith("edge://") || tab.url.startsWith("about:")) {
+    chrome.tts.speak("Desculpe, não atuo nessa página de sistema.", { rate: 1.2, lang: 'pt-BR' });
     broadcastStatus('Página Restrita');
     return;
   }
@@ -115,7 +77,7 @@ async function handleVoiceCommand(prompt) {
     chrome.tts.speak("Pensando.", { rate: 1.4, lang: 'pt-BR' });
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.5-flash",
       contents: `Comando: "${prompt}"\n[DOM]:\n${JSON.stringify(domResponse.data)}\n\n(Retorne as respostas estritamente neste formato JSON: {"action": "speak|click", "targetId": "vizio-id-X", "ttsMessage": "fala"})\nNão escreva nenhum texto fora as chaves do JSON!`,
       config: { systemInstruction: SYSTEM_PROMPT, temperature: 0.1 }
     });
@@ -133,10 +95,9 @@ async function handleVoiceCommand(prompt) {
     }
 
     broadcastStatus('Concluído!');
-
   } catch (err) {
     console.error("VIZIO AI: Falha na API Gemini:", err);
-    chrome.tts.speak("Houve uma falha na interpretação da inteligência.", { rate: 1.2, lang: 'pt-BR' });
+    chrome.tts.speak("Houve uma falha na interpretação.", { rate: 1.2, lang: 'pt-BR' });
     broadcastStatus('Falha API');
   } finally {
     setTimeout(() => chrome.tabs.update(tab.id, { muted: false }), 2000);
@@ -144,72 +105,63 @@ async function handleVoiceCommand(prompt) {
 }
 
 // ─── Message Router ──────────────────────────────────────────
-
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
-  // Popup: iniciar reconhecimento de voz
+  // Comandos Popup -> Offscreen
   if (request.action === 'START_RECOGNITION') {
-    startRecognitionInTab();
-    sendResponse({ status: 'ok' });
+    ensureOffscreenDocument().then(() => {
+      setTimeout(() => {
+        chrome.runtime.sendMessage({ target: 'offscreen', action: 'START_RECOGNITION' });
+      }, 200);
+      sendResponse({ status: 'ok' });
+    }).catch(err => {
+      console.error("Erro offscreen:", err);
+      sendResponse({ status: 'error', message: err.message });
+    });
     return true;
   }
 
-  // Popup: parar reconhecimento de voz
   if (request.action === 'STOP_RECOGNITION') {
-    stopRecognitionInTab();
+    chrome.runtime.sendMessage({ target: 'offscreen', action: 'STOP_RECOGNITION' });
     sendResponse({ status: 'ok' });
     return true;
   }
 
-  // Popup: enviar comando manualmente (input de texto)
+  // Popup -> Background
   if (request.action === 'TRIGGER_VOICE_COMMAND') {
     handleVoiceCommand(request.prompt);
     sendResponse({ status: 'started' });
     return true;
   }
 
-  // Content Script: eventos de reconhecimento — repassa ao popup
-  if (request.source === 'content') {
-
-    if (request.action === 'RECOGNITION_STARTED') {
-      chrome.runtime.sendMessage({ action: 'RECOGNITION_STARTED' }).catch(() => {});
-    }
-
-    if (request.action === 'TRANSCRIPT') {
-      chrome.runtime.sendMessage({
-        action: 'TRANSCRIPT',
-        text: request.text,
-        isFinal: request.isFinal
-      }).catch(() => {});
-
-      // Transcrição final → dispara Gemini
-      if (request.isFinal && request.text.trim()) {
-        handleVoiceCommand(request.text.trim());
-      }
-    }
-
-    if (request.action === 'RECOGNITION_ENDED') {
-      activeRecognitionTabId = null;
-      chrome.runtime.sendMessage({ action: 'RECOGNITION_ENDED' }).catch(() => {});
-    }
-
-    if (request.action === 'RECOGNITION_ERROR') {
-      activeRecognitionTabId = null;
-      chrome.runtime.sendMessage({
-        action: 'RECOGNITION_ERROR',
-        error: request.error
-      }).catch(() => {});
-    }
-
-    sendResponse({ status: 'ok' });
-    return true;
-  }
-
-  // Página de permissão: usuário concedeu microfone
+  // Página de Permissão -> Popup
   if (request.action === 'MIC_PERMISSION_GRANTED') {
     chrome.runtime.sendMessage({ action: 'MIC_PERMISSION_GRANTED' }).catch(() => {});
     sendResponse({ status: 'ok' });
     return true;
+  }
+
+  // Offscreen -> Popup/Background
+  if (request.source === 'offscreen') {
+    if (request.action === 'TRANSCRIPT') {
+      chrome.runtime.sendMessage({ action: 'TRANSCRIPT', text: request.text, isFinal: request.isFinal }).catch(() => {});
+      if (request.isFinal && request.text.trim()) {
+        handleVoiceCommand(request.text.trim());
+      }
+    }
+    else if (request.action === 'RECOGNITION_STARTED') {
+      chrome.runtime.sendMessage({ action: 'RECOGNITION_STARTED' }).catch(() => {});
+    }
+    else if (request.action === 'RECOGNITION_ENDED') {
+      chrome.runtime.sendMessage({ action: 'RECOGNITION_ENDED' }).catch(() => {});
+      // Não fecha o offscreen document para que a sessão `chrome-extension://`
+      // do Chrome não seja encerrada. Isso evita a perda de compasso da permissão
+      // "Allow while visiting the site".
+    }
+    else if (request.action === 'RECOGNITION_ERROR') {
+      chrome.runtime.sendMessage({ action: 'RECOGNITION_ERROR', error: request.error }).catch(() => {});
+      // Mesma justificativa
+    }
   }
 
   return true;
