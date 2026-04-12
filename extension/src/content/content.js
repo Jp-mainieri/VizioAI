@@ -121,17 +121,55 @@ class SemanticParser {
 function simulateTyping(element, text) {
   element.focus();
   
-  // Limpa o campo se solicitado implicitamente (pode ser ajustado se necessário)
   if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
     element.value = ''; 
     element.value = text;
     
-    // Disparar eventos vitais para frameworks modernos (React/Vue/Angular)
+    // Disparar eventos de input e change
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
     
-    // Simular blur para consolidar o estado se necessário
-    setTimeout(() => element.blur(), 500);
+    // 1. Simular a tecla ENTER (Código 13)
+    const enterEvent = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true
+    });
+    element.dispatchEvent(enterEvent);
+
+    // 2. Tentar submeter o formulário pai se existir
+    const form = element.closest('form');
+    if (form) {
+      // Tenta clicar no botão de submit do formulário
+      const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+      if (submitBtn) {
+        submitBtn.click();
+      } else {
+        // Se não achar botão de submit, tenta submeter o form diretamente
+        // Alguns sites bloqueiam .submit(), então tentamos disparar o evento
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    } else {
+      // 3. Se não houver form, procurar botões de pesquisa próximos (lupa, pesquisar, etc)
+      const nearbyButtons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(btn => {
+        const btnText = btn.innerText.toLowerCase();
+        const btnTitle = (btn.title || '').toLowerCase();
+        const btnAria = (btn.getAttribute('aria-label') || '').toLowerCase();
+        return btnText.includes('pesquisar') || btnText.includes('buscar') || btnText.includes('search') || 
+               btnTitle.includes('search') || btnTitle.includes('pesquisar') ||
+               btnAria.includes('search') || btnAria.includes('pesquisar');
+      });
+
+      // Se acharmos botões, clicar no mais próximo visualmente (simplificado por ordem no DOM)
+      if (nearbyButtons.length > 0) {
+        nearbyButtons[0].click();
+      }
+    }
+    
+    setTimeout(() => element.blur(), 300);
   }
 }
 

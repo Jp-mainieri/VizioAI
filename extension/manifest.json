@@ -9,7 +9,8 @@
     "scripting",
     "activeTab",
     "tts",
-    "audioCapture"
+    "audioCapture",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -25,7 +26,8 @@
       "run_at": "document_end"
     }
   ],
-  "action": {
-    "default_popup": "src/popup/index.html"
+  "action": {},
+  "side_panel": {
+    "default_path": "src/popup/index.html"
   }
 }

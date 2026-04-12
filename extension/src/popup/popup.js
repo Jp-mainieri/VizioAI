@@ -1,16 +1,15 @@
-// popup.js — VIZIO AI Voice Input (SpeechRecognition no popup — contexto visível da extensão)
+// popup.js — VIZIO AI (New UI/UX Logic)
 
 // --- Elements ---
-const micBtn        = document.getElementById('mic-btn');
-const micRing       = document.getElementById('mic-ring');
-const micLabel      = document.getElementById('mic-label');
+const mainUI        = document.getElementById('main-ui');
+const orb           = document.querySelector('.orb');
+const statusText    = document.getElementById('status');
 const transcriptEl  = document.getElementById('transcript');
-const transcriptBox = document.getElementById('transcript-box');
-const promptInput   = document.getElementById('prompt-input');
-const sendBtn       = document.getElementById('send-btn');
-const statusEl      = document.getElementById('status');
-const statusDot     = document.getElementById('status-dot');
-const noSpeechWarn  = document.getElementById('no-speech-warn');
+const orbIcons      = {
+  listening: document.getElementById('icon-listening'),
+  executing: document.getElementById('icon-executing'),
+  talking:   document.getElementById('icon-talking')
+};
 
 const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -19,120 +18,55 @@ let isListening = false;
 let recognition = null;
 let mediaStream = null;
 
-// --- Status Helper ---
-function setStatus(state, text) {
-  statusEl.textContent = text;
-  statusDot.className  = 'status-dot';
-  if (state === 'listening') statusDot.classList.add('listening');
-  else if (state === 'thinking') statusDot.classList.add('thinking');
-  else if (state === 'done')  statusDot.classList.add('done');
-  else if (state === 'error') statusDot.classList.add('error');
+/**
+ * Atualiza visualmente a Orbe e o Texto conforme o estado
+ * Estados: 'listening' (azul), 'executing' (laranja), 'talking' (verde), 'error' (vermelho)
+ */
+function UI_updateState(state, text) {
+  const translations = {
+    listening: 'Ouvindo...',
+    executing: 'Executando...',
+    talking:   'Falando...',
+    error:     'Erro'
+  };
+  
+  document.body.className = `state-${state}`;
+  statusText.textContent = text || translations[state] || 'Pronto';
+  
+  // Troca de ícones
+  Object.values(orbIcons).forEach(icon => icon.classList.add('hidden'));
+  if (orbIcons[state]) {
+    orbIcons[state].classList.remove('hidden');
+  } else if (state === 'error') {
+    orbIcons.listening.classList.remove('hidden'); 
+  }
 }
 
 function setListeningUI(active) {
   isListening = active;
-  micBtn.classList.toggle('recording', active);
-  micRing.classList.toggle('active', active);
-  micLabel.textContent = active ? 'Ouvindo\u2026' : 'Toque para falar';
-  micLabel.classList.toggle('recording', active);
-  transcriptBox.classList.toggle('active', active);
-}
-
-function resetSendBtn() {
-  sendBtn.disabled = false;
-  sendBtn.textContent = 'Enviar Comando';
-}
-
-/** Mensagens distintas: falha do microfone (getUserMedia) vs bloqueio do serviço Web Speech. */
-function messageForMicFailure(name, message) {
-  const n = (name || '').toString();
-  const m = (message || '').toString();
-  if (n === 'NotAllowedError' || m.includes('Permission denied')) {
-    return 'Microfone bloqueado para a extensão. Abra a página de permissão (ícone da extensão) ou ajuste chrome://settings/content/microphone.';
-  }
-  if (n === 'NotFoundError') {
-    return 'Nenhum microfone encontrado. Verifique se há um microfone ligado.';
-  }
-  if (n === 'NotReadableError' || n === 'TrackStartError') {
-    return 'O microfone está em uso por outra aplicação ou não pode ser aberto.';
-  }
-  return `Microfone: ${m || n || 'erro desconhecido'}`;
-}
-
-function messageForSpeechApiError(errorCode) {
-  const code = (errorCode || '').toString();
-  const map = {
-    'not-allowed':   'Reconhecimento de voz bloqueado pelo navegador (Web Speech API). O microfone pode estar OK; tente outro perfil do Chrome ou rede.',
-    'no-speech':     'Nenhuma fala detectada. Tente novamente.',
-    'network':       'Erro de rede no reconhecimento de voz.',
-    'aborted':       'Reconhecimento cancelado.',
-    'not-supported': 'SpeechRecognition não disponível neste navegador.',
-  };
-  return map[code] || `Reconhecimento de voz: ${code || 'erro desconhecido'}`;
-}
-
-function showRecognitionError(kind, detail) {
-  setListeningUI(false);
-  let msg;
-  if (kind === 'mic') msg = messageForMicFailure(detail?.name, detail?.message);
-  else msg = messageForSpeechApiError(detail);
-  setStatus('error', msg);
-  transcriptEl.textContent = msg;
-}
-
-// --- Permissao de Microfone ---
-// O popup perde foco (e fecha) quando o Chrome tenta exibir o dialogo de permissao.
-// A solucao e abrir uma aba dedicada e persistente que chama getUserMedia corretamente.
-async function checkOrRequestMicPermission() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach(track => track.stop());
-    console.info('[VIZIO mic] getUserMedia OK no popup (permissão da extensão).');
-    return true;
-  } catch (err) {
-    console.error('[VIZIO mic] getUserMedia falhou no popup:', err?.name, err?.message);
-    setStatus('idle', 'Abrindo pagina de permissao...');
-    chrome.tabs.create(
-      { url: chrome.runtime.getURL('src/permission/permission.html'), active: true }
-    );
-    return false;
+  if (active) {
+    UI_updateState('listening', 'Ouvindo...');
   }
 }
 
-function stopMediaStream() {
-  if (mediaStream) {
-    mediaStream.getTracks().forEach(t => t.stop());
-    mediaStream = null;
-  }
-}
-
-function stopRecognitionLocal() {
-  if (recognition) {
-    try { recognition.stop(); } catch (_) {}
-    recognition = null;
-  }
-  stopMediaStream();
-}
+// --- Voice Recognition Logic ---
 
 async function startRecognitionInPopup() {
   if (!SpeechRecognitionAPI) {
-    noSpeechWarn.style.display = 'block';
-    showRecognitionError('speech', 'not-supported');
+    transcriptEl.textContent = 'Erro: Reconhecimento de voz não suportado.';
+    UI_updateState('error', 'Incompatível');
     return;
   }
 
   stopRecognitionLocal();
-
-  setStatus('listening', 'Preparando microfone\u2026');
-  transcriptEl.textContent = '';
-  transcriptEl.classList.remove('has-text');
+  transcriptEl.textContent = 'Aguardando voz...';
 
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    console.info('[VIZIO mic] Stream ativo no popup para SpeechRecognition.');
   } catch (e) {
-    console.error('[VIZIO mic] getUserMedia falhou ao iniciar reconhecimento:', e?.name, e?.message);
-    showRecognitionError('mic', e);
+    console.error('Falha no Mic:', e);
+    UI_updateState('error', 'Mic Bloqueado');
+    transcriptEl.textContent = 'Por favor, libere o microfone nas configurações.';
     return;
   }
 
@@ -140,12 +74,9 @@ async function startRecognitionInPopup() {
   recognition.lang            = 'pt-BR';
   recognition.continuous      = false;
   recognition.interimResults  = true;
-  recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
-    console.info('[VIZIO speech] SpeechRecognition iniciado (popup).');
     setListeningUI(true);
-    setStatus('listening', 'Ouvindo voc\u00ea\u2026');
   };
 
   recognition.onresult = (event) => {
@@ -158,145 +89,101 @@ async function startRecognitionInPopup() {
 
     if (final) {
       const text = final.trim();
-      transcriptEl.textContent = text;
-      transcriptEl.classList.add('has-text');
-      promptInput.value = text;
+      transcriptEl.textContent = `"${text}"`;
       setListeningUI(false);
-      setStatus('thinking', 'Gemini analisando\u2026');
-      sendBtn.disabled = true;
-      sendBtn.textContent = 'Processando\u2026';
+      UI_updateState('executing', 'Executing...');
+      
       stopRecognitionLocal();
 
-      chrome.runtime.sendMessage(
-        { action: 'TRIGGER_VOICE_COMMAND', prompt: text },
-        () => {
-          if (chrome.runtime.lastError) {
-            setStatus('error', 'Erro de comunicacao com a extensao.');
-            resetSendBtn();
-          }
-        }
-      );
+      chrome.runtime.sendMessage({ action: 'TRIGGER_VOICE_COMMAND', prompt: text });
     } else if (interim) {
-      transcriptEl.innerHTML = `<span class="interim">${interim}</span>`;
+      transcriptEl.textContent = interim;
     }
   };
 
   recognition.onerror = (event) => {
-    console.error('[VIZIO speech] SpeechRecognition.onerror (camada Web Speech, não getUserMedia):', event.error);
-    showRecognitionError('speech', event.error);
+    console.error('Speech error:', event.error);
+    UI_updateState('error', 'Erro de Voz');
     stopRecognitionLocal();
   };
 
   recognition.onend = () => {
-    console.info('[VIZIO speech] SpeechRecognition encerrado (popup).');
     stopMediaStream();
     recognition = null;
-    if (statusDot.classList.contains('listening')) {
-      setListeningUI(false);
-      setStatus('idle', 'Inativo \u2014 pronto para ouvir');
-    }
   };
 
   try {
     recognition.start();
   } catch (e) {
-    console.error('[VIZIO speech] recognition.start() falhou:', e?.name, e?.message);
-    showRecognitionError('mic', e);
     stopRecognitionLocal();
   }
 }
 
-// --- Mic Toggle ---
-async function startListening() {
-  if (isListening) return;
-
-  const granted = await checkOrRequestMicPermission();
-  if (!granted) return;
-
-  await startRecognitionInPopup();
+function stopRecognitionLocal() {
+  if (recognition) {
+    try { recognition.stop(); } catch (_) {}
+    recognition = null;
+  }
+  stopMediaStream();
 }
 
-function stopListening() {
-  if (!isListening && !recognition) return;
-  stopRecognitionLocal();
-  setListeningUI(false);
-  setStatus('idle', 'Inativo \u2014 pronto para ouvir');
+function stopMediaStream() {
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(t => t.stop());
+    mediaStream = null;
+  }
 }
 
-micBtn.addEventListener('click', () => {
-  if (isListening || recognition) {
-    stopListening();
+// --- Interaction ---
+
+orb.addEventListener('click', () => {
+  if (isListening) {
+    stopRecognitionLocal();
+    UI_updateState('listening', 'Ready to listen');
+    isListening = false;
   } else {
-    startListening();
+    startRecognitionInPopup();
   }
 });
 
-// --- Keyboard Shortcut (Spacebar) ---
+// Shortcut de Teclado (Espaço)
 document.addEventListener('keydown', (e) => {
-  if (e.target === promptInput) return;
   if (e.code === 'Space') {
     e.preventDefault();
-    if (isListening || recognition) { stopListening(); } else { startListening(); }
-  }
-  if (e.code === 'Enter' && e.target === promptInput) {
-    e.preventDefault();
-    const cmd = promptInput.value.trim();
-    if (cmd) triggerManualCommand(cmd);
+    orb.click();
   }
 });
-
-// --- Manual Send ---
-sendBtn.addEventListener('click', () => {
-  const cmd = promptInput.value.trim();
-  if (!cmd) {
-    setStatus('error', 'Digite um comando antes de enviar.');
-    return;
-  }
-  triggerManualCommand(cmd);
-});
-
-function triggerManualCommand(prompt) {
-  setStatus('thinking', 'Gemini analisando\u2026');
-  sendBtn.disabled = true;
-  sendBtn.textContent = 'Processando\u2026';
-
-  chrome.runtime.sendMessage(
-    { action: 'TRIGGER_VOICE_COMMAND', prompt },
-    (response) => {
-      if (chrome.runtime.lastError) {
-        setStatus('error', 'Erro de comunicacao com a extensao.');
-        resetSendBtn();
-      }
-    }
-  );
-}
 
 // --- Listeners: Mensagens do Background ---
 chrome.runtime.onMessage.addListener((request) => {
 
-  // Permissao concedida pela pagina de permissao dedicada
-  if (request.action === 'MIC_PERMISSION_GRANTED') {
-    setStatus('idle', 'Microfone liberado! Clique no microfone para falar.');
-    startListening();
-    return;
-  }
-
-  // Atualizacoes de status vindas do handleVoiceCommand (Gemini)
+  // Atualizações de status do Vertex AI / VIZIO AI
   if (request.action === 'UPDATE_STATUS') {
     const text = request.statusText || '';
-    if (text.toLowerCase().includes('conclu')) {
-      setStatus('done', text); resetSendBtn();
-    } else if (
-      text.toLowerCase().includes('falha') ||
-      text.toLowerCase().includes('erro') ||
-      text.toLowerCase().includes('indisp') ||
-      text.toLowerCase().includes('restrit')
-    ) {
-      setStatus('error', text); resetSendBtn();
-    } else if (text.toLowerCase().includes('analis') || text.toLowerCase().includes('processand')) {
-      setStatus('thinking', text);
-    } else {
-      setStatus('idle', text); resetSendBtn();
+    const lowText = text.toLowerCase();
+
+    if (lowText.includes('pensando') || lowText.includes('processan') || lowText.includes('analisand')) {
+      UI_updateState('executing', 'Executando...');
+    } 
+    else if (lowText.includes('conclu')) {
+      UI_updateState('talking', 'Falando...');
+      setTimeout(() => {
+        if (document.body.className === 'state-talking') {
+            UI_updateState('listening', 'Pronto para ouvir');
+            transcriptEl.textContent = 'Toque no ícone para começar';
+        }
+      }, 5000);
+    } 
+    else if (lowText.includes('falha') || lowText.includes('erro') || lowText.includes('indisp')) {
+      UI_updateState('error', text);
+      transcriptEl.textContent = 'Houve um problema. Tente novamente.';
     }
   }
+
+  if (request.action === 'MIC_PERMISSION_GRANTED') {
+    UI_updateState('listening', 'Mic OK! Toque para falar.');
+  }
 });
+
+// Estado inicial
+UI_updateState('listening', 'Pronto para ouvir');

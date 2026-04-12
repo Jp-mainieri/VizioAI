@@ -1,8 +1,10 @@
-// src/background/background.js
 import { GoogleGenAI } from "../utils/genai.js";
 import { VIZIO_CONFIG } from "../utils/config.js";
 
 console.log("VIZIO AI: Background Service Worker Loaded.");
+
+// Configurar o Side Panel para abrir ao clicar no ícone da extensão
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
 
 // Instancia a IA usando o arquivo de configuração manual
 const ai = new GoogleGenAI();
@@ -45,7 +47,8 @@ Regras de Resposta:
    - "ttsMessage": Feedback falado para o usuário sobre o que você está fazendo.
 
 Exemplos:
-- Digitar: {"action": "type", "targetId": "vizio-id-5", "text": "bola", "ttsMessage": "Digitando bola no campo de busca."}
+- Digitar: {"action": "type", "targetId": "vizio-id-5", "text": "bola", "ttsMessage": "Pesquisando por bola."}
+  (Dica: Ao digitar em campos de busca, o sistema apertará Enter automaticamente para você.)
 - Navegar: {"action": "navigate", "direction": "back", "ttsMessage": "Voltando para a página anterior."}`;
 
 function broadcastStatus(statusText) {
@@ -87,7 +90,7 @@ async function handleVoiceCommand(prompt) {
   }
 
   try {
-    broadcastStatus('Vertex AI Analisando...');
+    broadcastStatus('VIZIO AI Pensando...');
     chrome.tts.speak("Pensando.", { rate: 1.4, lang: 'pt-BR' });
 
     const response = await ai.models.generateContent({
