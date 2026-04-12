@@ -9,7 +9,9 @@
     "scripting",
     "activeTab",
     "audio",
-    "tts"
+    "tts",
+    "microphone",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"
