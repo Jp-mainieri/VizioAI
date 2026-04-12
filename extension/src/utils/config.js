@@ -13,7 +13,7 @@ export const VIZIO_CONFIG = {
   LOCATION: 'us-central1',
 
   // Sua API Key gerada no Google Cloud (com restrição para Vertex AI API)
-  API_KEY: 'AQ.Ab8RN6LH4AP90G0Y5mqaHFxeMdW3ivMEugP0SJIV6oChqdI53Q',
+  API_KEY: '',
 
   // Modelo do Gemini para usar no Vertex (ex: gemini-1.5-flash)
   MODEL_NAME: 'gemini-2.5-flash'
