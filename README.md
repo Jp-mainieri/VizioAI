@@ -59,10 +59,10 @@ Projeto do hackathon **AI Tinkerers & Google DeepMind: AI for Social Impact**, e
 Requisitos: Google Chrome e um projeto no Google Cloud com a Vertex AI habilitada e uma API key restrita à Vertex AI API.
 
 1. Clone o repositório.
-2. Edite `extension/src/utils/config.js` e preencha `PROJECT_ID`, `LOCATION`, `API_KEY` e `MODEL_NAME` (padrão `gemini-2.5-flash`).
+2. Copie `extension/src/utils/config.example.js` para `extension/src/utils/config.js` e preencha `PROJECT_ID`, `LOCATION`, `API_KEY` e `MODEL_NAME` (padrão `gemini-2.5-flash`).
 3. Abra `chrome://extensions`, ative o **Modo do desenvolvedor**, clique em **Carregar sem compactação** e selecione a pasta `extension/`.
 4. Clique no ícone da extensão para abrir o painel lateral, autorize o microfone e fale um comando em português.
 
-> **Atenção com a chave:** `config.js` está no `.gitignore`, mas o arquivo já é rastreado pelo git, então o `.gitignore` não o protege. Para não commitar a chave por engano, rode uma vez `git update-index --skip-worktree extension/src/utils/config.js`. Nunca publique a API key; se ela vazar, revogue-a no Google Cloud.
+> **Atenção com a chave:** o `config.js` está no `.gitignore` e não é versionado; só o `config.example.js` (sem chave) está no repositório. Nunca publique a API key; se ela vazar, revogue-a no Google Cloud. Se você já tinha um clone com o `config.js` preenchido, guarde uma cópia dele antes de atualizar.
 
 Não há etapa de build nem testes automatizados.
